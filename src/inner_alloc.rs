@@ -31,10 +31,7 @@ unsafe impl std::alloc::GlobalAlloc for InnerAlloc {
         let cur = self.cur.get();
         let next = cur + (cur as *const u8).align_offset(layout.align());
         if self.end < next + layout.size() {
-            panic!(
-                "can not allocate memory chunk; cur={:p}, end={:p}, layout={:?}",
-                cur as *const u8, self.end as *const u8, layout
-            );
+            panic!()
         }
         self.cur.set(next + layout.size());
         next as *mut u8
