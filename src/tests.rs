@@ -24,4 +24,6 @@ fn works() {
     // view.enter(|x| println!("x.a={}", x.a));
     view.enter(|x| x.y = Box::new(124));
     // view.enter(|x| println!("x.y={}", x.y));
+    let y = view.enter(|x| x.a);
+    println!("{y}");
 }
