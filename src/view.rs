@@ -11,7 +11,6 @@ pub struct View<T> {
     p: Option<Box<T>>,
     alloc: Option<InnerAlloc>,
     orig: *mut libc::c_void,
-    store_range: (usize, usize),
 }
 
 impl<T: Default> View<T> {
@@ -19,12 +18,10 @@ impl<T: Default> View<T> {
         let (slot, orig) = store.borrow_mut().allocate()?;
         let size = store.borrow().slot_size;
 
-        let range = store.borrow().forbidden_range();
-
         let inner = InnerAlloc::new(orig as usize, size);
         alloc::set_inner(inner);
         let p = Some(Box::new(T::default()));
-        let inner = alloc::take_inner(range).unwrap();
+        let inner = alloc::take_inner().unwrap();
 
         let view = Self {
             store,
@@ -33,7 +30,6 @@ impl<T: Default> View<T> {
             p,
             alloc: Some(inner),
             orig,
-            store_range: range,
         };
 
         Some(view)
@@ -52,7 +48,7 @@ impl<T> View<T> {
         let alloc = self.alloc.take().unwrap();
         alloc::set_inner(alloc);
         let r = f(self.p.as_mut().unwrap().as_mut());
-        let inner = alloc::take_inner(self.store_range).unwrap();
+        let inner = alloc::take_inner().unwrap();
         self.alloc = Some(inner);
         r
     }
@@ -69,7 +65,6 @@ impl<T> View<T> {
             alloc: Some(inner),
             slot_size: self.slot_size,
             orig: self.orig,
-            store_range: self.store_range,
         };
         Some(view)
     }
@@ -85,7 +80,7 @@ impl<T> Drop for View<T> {
         let alloc = self.alloc.take().unwrap();
         alloc::set_inner(alloc);
         drop(p);
-        let _ = alloc::take_inner(self.store_range).unwrap();
+        let _ = alloc::take_inner().unwrap();
         self.store.borrow_mut().free_slot(self.slot);
     }
 }

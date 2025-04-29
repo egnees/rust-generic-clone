@@ -2,7 +2,7 @@ use std::{cell::RefCell, ffi::CString, rc::Rc, str::FromStr};
 
 use rand::{Rng, distr::Alphanumeric};
 
-use crate::{alloc, sys, view::View};
+use crate::{sys, view::View};
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -13,7 +13,6 @@ pub(crate) struct StoreState {
     ptr: *mut libc::c_void,
     file_name: CString,
     allocated: Vec<*mut libc::c_void>,
-    forbidden_range: (usize, usize),
 }
 
 impl StoreState {
@@ -41,9 +40,6 @@ impl StoreState {
             0,
         )?;
 
-        let forbidden_range = (ptr as usize, ptr as usize + total_mem);
-        alloc::set_up_forbidden_range(forbidden_range);
-
         let store = Self {
             slot_size,
             free_slots: (0..slots).collect::<Vec<_>>(),
@@ -51,7 +47,6 @@ impl StoreState {
             ptr,
             allocated: Default::default(),
             file_name,
-            forbidden_range,
         };
         Ok(store)
     }
@@ -97,10 +92,6 @@ impl StoreState {
 
     pub(crate) fn free_slot(&mut self, slot: usize) {
         self.free_slots.push(slot);
-    }
-
-    pub(crate) fn forbidden_range(&self) -> (usize, usize) {
-        self.forbidden_range
     }
 }
 
