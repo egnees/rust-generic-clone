@@ -41,16 +41,17 @@ impl<T: Default> View<T> {
 }
 
 impl<T> View<T> {
-    pub fn enter(&mut self, f: impl FnOnce(&mut T)) {
+    pub fn enter<R>(&mut self, f: impl FnOnce(&mut T) -> R) -> R {
         self.store
             .borrow()
             .map_to_slot(self.orig, self.slot)
             .unwrap();
         let alloc = self.alloc.take().unwrap();
         alloc::set_inner(alloc);
-        f(self.p.as_mut().unwrap().as_mut());
+        let r = f(self.p.as_mut().unwrap().as_mut());
         let inner = alloc::take_inner(self.store_range).unwrap();
         self.alloc = Some(inner);
+        r
     }
 
     pub fn try_clone(&self) -> Option<Self> {
