@@ -1,4 +1,4 @@
-pub mod alloc;
+mod alloc;
 mod inner_alloc;
 pub mod store;
 mod sys;
