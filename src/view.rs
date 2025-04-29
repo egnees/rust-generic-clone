@@ -41,7 +41,7 @@ impl<T: Default> View<T> {
 }
 
 impl<T> View<T> {
-    pub fn enter<R>(&mut self, f: impl FnOnce(&mut T) -> R) -> R {
+    pub fn enter<R>(&mut self, f: impl Fn(&mut T) -> R) -> R {
         self.store
             .borrow()
             .map_to_slot(self.orig, self.slot)
