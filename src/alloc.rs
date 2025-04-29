@@ -4,8 +4,13 @@ use crate::inner_alloc::InnerAlloc;
 
 ////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Default)]
+struct SystemAllocWrapper {
+    forbidden_range: Option<(usize, usize)>,
+}
+
 enum Alloc {
-    System(std::alloc::System),
+    System(SystemAllocWrapper),
     Inner(InnerAlloc),
 }
 
@@ -13,7 +18,7 @@ unsafe impl GlobalAlloc for Alloc {
     unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
         unsafe {
             match self {
-                Alloc::System(system) => system.alloc(layout),
+                Alloc::System(_) => std::alloc::System.alloc(layout),
                 Alloc::Inner(inner) => inner.alloc(layout),
             }
         }
@@ -22,7 +27,14 @@ unsafe impl GlobalAlloc for Alloc {
     unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {
         unsafe {
             match self {
-                Alloc::System(system) => system.dealloc(ptr, layout),
+                Alloc::System(wrapper) => {
+                    if let Some((from, to)) = wrapper.forbidden_range {
+                        if from <= (ptr as usize) && (ptr as usize) < to {
+                            return;
+                        }
+                    }
+                    std::alloc::System.dealloc(ptr, layout)
+                }
                 Alloc::Inner(inner) => inner.dealloc(ptr, layout),
             }
         }
@@ -32,18 +44,32 @@ unsafe impl GlobalAlloc for Alloc {
 ////////////////////////////////////////////////////////////////////////////////
 
 thread_local! {
-    static CURRENT_ALLOCATOR: RefCell<Alloc> = const { RefCell::new(Alloc::System(std::alloc::System)) };
+    static CURRENT_ALLOCATOR: RefCell<Alloc> = const { RefCell::new(Alloc::System(SystemAllocWrapper { forbidden_range: None })) };
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+
+pub fn set_up_forbidden_range(range: (usize, usize)) {
+    CURRENT_ALLOCATOR.with(|x| {
+        *x.borrow_mut() = Alloc::System(SystemAllocWrapper {
+            forbidden_range: Some(range),
+        });
+    })
+}
 
 pub fn set_inner(inner: InnerAlloc) {
     CURRENT_ALLOCATOR.with(|x| *x.borrow_mut() = Alloc::Inner(inner));
 }
 
-pub fn take_inner() -> Option<InnerAlloc> {
-    let prev = CURRENT_ALLOCATOR
-        .with(|x| std::mem::replace(&mut *x.borrow_mut(), Alloc::System(std::alloc::System)));
+pub fn take_inner(forbiden_range: (usize, usize)) -> Option<InnerAlloc> {
+    let prev = CURRENT_ALLOCATOR.with(|x| {
+        std::mem::replace(
+            &mut *x.borrow_mut(),
+            Alloc::System(SystemAllocWrapper {
+                forbidden_range: Some(forbiden_range),
+            }),
+        )
+    });
     match prev {
         Alloc::System(_system) => None,
         Alloc::Inner(inner) => Some(inner),

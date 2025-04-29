@@ -1,6 +1,8 @@
-use std::{cell::RefCell, ffi::CString, rc::Rc};
+use std::{cell::RefCell, ffi::CString, rc::Rc, str::FromStr};
 
-use crate::{sys, view::View};
+use rand::{Rng, distr::Alphanumeric};
+
+use crate::{alloc, sys, view::View};
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -9,7 +11,9 @@ pub(crate) struct StoreState {
     free_slots: Vec<usize>,
     shared_mem_fd: libc::c_int,
     ptr: *mut libc::c_void,
+    file_name: CString,
     allocated: Vec<*mut libc::c_void>,
+    forbidden_range: (usize, usize),
 }
 
 impl StoreState {
@@ -18,15 +22,17 @@ impl StoreState {
         let slot_size = slot_size.next_multiple_of(page_size);
         let total_mem = slots * slot_size;
 
-        println!("opening...");
-        let shared_mem_fd = sys::shm_open(
-            CString::new("/hello2".as_bytes()).unwrap().as_c_str(),
-            libc::O_CREAT | libc::O_RDWR,
-            0o666,
-        )?;
-        println!("opened");
+        let file_name: String = rand::rng()
+            .sample_iter(&Alphanumeric)
+            .take(30)
+            .map(char::from)
+            .collect();
+
+        let file_name = CString::from_str(file_name.as_str()).unwrap();
+
+        let shared_mem_fd =
+            sys::shm_open(file_name.as_c_str(), libc::O_CREAT | libc::O_RDWR, 0o666)?;
         sys::ftruncate(shared_mem_fd, total_mem as i64)?;
-        println!("truncated");
         let ptr = sys::mmap_select_addr(
             total_mem,
             libc::PROT_READ | libc::PROT_WRITE,
@@ -34,7 +40,9 @@ impl StoreState {
             shared_mem_fd,
             0,
         )?;
-        println!("got ptr: {ptr:?}");
+
+        let forbidden_range = (ptr as usize, ptr as usize + total_mem);
+        alloc::set_up_forbidden_range(forbidden_range);
 
         let store = Self {
             slot_size,
@@ -42,6 +50,8 @@ impl StoreState {
             shared_mem_fd,
             ptr,
             allocated: Default::default(),
+            file_name,
+            forbidden_range,
         };
         Ok(store)
     }
@@ -88,13 +98,17 @@ impl StoreState {
     pub(crate) fn free_slot(&mut self, slot: usize) {
         self.free_slots.push(slot);
     }
+
+    pub(crate) fn forbidden_range(&self) -> (usize, usize) {
+        self.forbidden_range
+    }
 }
 
 impl Drop for StoreState {
     fn drop(&mut self) {
         sys::munmap(self.ptr, self.free_slots.len() * self.slot_size).unwrap();
         sys::close(self.shared_mem_fd).unwrap();
-        sys::shm_unlink(CString::new("/hello2".as_bytes()).unwrap().as_c_str()).unwrap();
+        sys::shm_unlink(self.file_name.as_c_str()).unwrap();
         for p in self.allocated.iter().copied() {
             sys::munmap(p, self.slot_size).unwrap();
         }

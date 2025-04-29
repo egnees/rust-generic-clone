@@ -58,7 +58,6 @@ pub fn close(fd: i32) -> Result<(), std::io::Error> {
 ////////////////////////////////////////////////////////////////////////////////
 
 pub fn ftruncate(fd: i32, size: i64) -> Result<(), std::io::Error> {
-    println!("ftruncat: fd={fd}, size={size}");
     let result = unsafe { libc::ftruncate(fd, size) };
     if result == -1 {
         Err(std::io::Error::last_os_error())
@@ -71,7 +70,6 @@ pub fn ftruncate(fd: i32, size: i64) -> Result<(), std::io::Error> {
 ////////////////////////////////////////////////////////////////////////////////
 
 pub fn shm_open(name: &CStr, flags: i32, mode: i32) -> Result<i32, std::io::Error> {
-    println!("name: {name:?}");
     let result = unsafe { libc::shm_open(name.as_ptr(), flags, mode) };
     if result == -1 {
         Err(std::io::Error::last_os_error())

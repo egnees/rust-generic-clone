@@ -1,8 +1,10 @@
 [package]
-name = "rust-generic-clone"
+name = "generic-clone"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+futures = "0.3.31"
 libc = "0.2.172"
+rand = "0.9.1"
 smol = "2.0.2"
