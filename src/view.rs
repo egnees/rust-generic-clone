@@ -78,8 +78,12 @@ impl<T> View<T> {
 impl<T> Drop for View<T> {
     fn drop(&mut self) {
         let p = self.p.take().unwrap();
-        let inner = self.alloc.take().unwrap();
-        alloc::set_inner(inner);
+        self.store
+            .borrow()
+            .map_to_slot(self.orig, self.slot)
+            .unwrap();
+        let alloc = self.alloc.take().unwrap();
+        alloc::set_inner(alloc);
         drop(p);
         let _ = alloc::take_inner(self.store_range).unwrap();
         self.store.borrow_mut().free_slot(self.slot);
